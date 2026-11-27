@@ -1,6 +1,6 @@
 name: build-desktop
 
-# 手动触发：在 arm64 runner 上原生构建桌面沙箱镜像并推送到 ghcr.io
+# 手动触发：构建 NATIVE linux/arm64 桌面沙箱镜像并推送到 ghcr.io
 on:
   workflow_dispatch:
 
@@ -10,11 +10,10 @@ permissions:
 
 jobs:
   build:
-    # 官方 sandbox-base 镜像是 amd64，且你的集群已验证可运行（QEMU 模拟）。
-    # 用 x64 runner 原生构建 amd64，最稳。
-    runs-on: ubuntu-latest
+    # 原生 arm64 runner（public 仓库可用）
+    runs-on: ubuntu-24.04-arm
     env:
-      IMAGE: ghcr.io/proximity333/agent-desktop:latest
+      IMAGE: ghcr.io/proximity333/agent-desktop:arm64
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -26,10 +25,9 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: sandbox/Dockerfile.desktop
-          platforms: linux/amd64
-          # 关键：不要生成 OCI index / attestation。arm64 节点只能拉单 manifest 的 amd64
-          # （官方 sandbox-base 也是单 manifest，靠 binfmt 运行）。
+          file: sandbox/Dockerfile.desktop.arm64
+          platforms: linux/arm64
+          # 单 manifest，避免 OCI index 在节点上匹配失败
           provenance: false
           sbom: false
           push: true

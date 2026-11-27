@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1
+# Desktop sandbox image for agent-sandbox — NATIVE linux/arm64.
+#
+# Why: the official agent-sandbox base images are amd64-only and rely on binfmt
+# emulation, which is not present on every arm64 node. This image runs natively.
+#
+# envd: E2B publishes arm64 envd binaries at
+#   https://storage.googleapis.com/e2b-artifact-binaries/envd/v<ver>/arm64/envd
+# We use v0.10.2/arm64. NOTE: the agent-sandbox controller ships envd 0.2.10;
+# v0.10.2 is a newer E2B envd and is expected to be protocol-compatible, but
+# this must be verified at create/exec time.
+#
+# Build (arm64 host or arm runner):
+#   docker buildx build --platform linux/arm64 \
+#     -f sandbox/Dockerfile.desktop.arm64 \
+#     -t ghcr.io/proximity333/agent-desktop:arm64 --push .
+
+FROM python:3.12-slim-trixie
+
+USER root
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:99 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    ENVD_ARGS="-isnotfc -no-cgroups"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      sudo \
+      tini \
+      xvfb \
+      x11vnc \
+      novnc \
+      python3-websockify \
+      chromium \
+      unzip \
+      procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Match the official base user (uid 1000, passwordless sudo).
+RUN groupadd -g 1000 user \
+ && useradd -u 1000 -g 1000 -m -s /bin/bash user \
+ && chown -R user:user /home/user \
+ && chmod -R 777 /home/user \
+ && printf 'user ALL=(ALL) NOPASSWD:ALL\nDefaults:user !requiretty\n' >> /etc/sudoers
+
+# arm64 envd (E2B release artifact)
+ADD --chmod=0755 \
+  https://storage.googleapis.com/e2b-artifact-binaries/envd/v0.10.2/arm64/envd \
+  /usr/bin/envd
+
+# browse CLI (release service ships linux-arm64)
+RUN (curl -fsSL https://opencode.ai/browse/install -o /tmp/browse-install.sh \
+      && XDG_BIN_HOME=/usr/local/bin HOME=/root bash /tmp/browse-install.sh --agent none --no-modify-path) \
+    || true
+RUN browse --version || true
+
+# browse browser extension (unpacked)
+RUN mkdir -p /opt/browse-extension \
+ && ( curl -fsSL https://anoma.ly/release/browse/extension/stable/chromium -o /tmp/ext.zip \
+      || curl -fsSL https://anoma.ly/release/browse/extension/dev/chromium     -o /tmp/ext.zip ) \
+ && unzip -q /tmp/ext.zip -d /opt/browse-extension \
+ && rm -f /tmp/ext.zip \
+ || echo "WARN: browse extension not fetched; configure manually"
+
+COPY sandbox/start-desktop.sh /usr/local/bin/start-desktop.sh
+RUN chmod +x /usr/local/bin/start-desktop.sh
+
+EXPOSE 49983 5900 6080
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/start-desktop.sh"]
+CMD []

@@ -10,7 +10,8 @@ chmod 777 /workspace 2>/dev/null || true
 
 # 1) envd is mandatory: agent-sandbox controller uses it on 49983 for
 #    init / commands / snapshot / pause-resume.
-/usr/bin/envd -port 49983 &
+#    ENVD_ARGS: newer envd (0.10.x) in a plain container needs -isnotfc -no-cgroups.
+/usr/bin/envd ${ENVD_ARGS:-} -port 49983 &
 
 # 2) Virtual display.
 Xvfb :99 -screen 0 1280x800x24 -nolisten tcp -ac &
