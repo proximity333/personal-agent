@@ -21,7 +21,7 @@
 ### 1.1 账号与基础环境
 - [ ] 一个 **Kubernetes 1.28+** 集群，已部署 **agent-sandbox**（`kubectl apply -n agent-sandbox -f install.yaml`），并通过 Ingress 或 port-forward 暴露 API；配置 `E2B_API_URL` / `E2B_DOMAIN` / `E2B_API_KEY`（**务必改掉默认 admin token**）。
 - [ ] 一个自定义**沙箱模板镜像**（容器镜像 + 模板元数据），预装：
-  - [ ] `envd`（**硬性要求**，监听 49983；二进制从 agent-sandbox 模板目录取固定版本）
+  - [ ] `envd`（**硬性要求**，监听 49983；arm64 用 E2B 产物 `envd/v0.10.2/arm64/envd`，启动加 `-isnotfc -no-cgroups`）
   - [ ] `browse` CLI 二进制（**固定版本**）
   - [ ] Chromium（有头，跑在 Xvfb 虚拟显示上）
   - [ ] browse extension（预装到 profile）
@@ -204,3 +204,29 @@
 - [ ] noVNC `view_only` 切换的实时性与鉴权 URL 的安全边界。
 - [ ] agent-sandbox 的 pause 是否保留进程内存（还是仅文件系统），以决定持久化只依赖文件系统。
 - [ ] 模型出口代理在沙箱网络策略下是否可通（egress 白名单）。
+
+---
+
+## 8. 验证进展（2026-11-27）
+
+| 项 | 状态 | 结论 |
+|---|---|---|
+| 实例连通 / 鉴权 | ✅ | `healthz` ok；API 用 **`X-API-Key`**；create / exec / delete 均通过 |
+| 端口路由 | ✅ | path 形式 `…/sandboxes/router/<id>/<port>/`：HTTP 200 + **WS 101**；子域名形式不可用 |
+| 模板注册 | ✅ | `desktop`（`port=6080`，image `…/agent-desktop:arm64`） |
+| 沙箱创建 | ✅ | E2B API；注意 Cloudflare **524** 时沙箱仍在后台创建，改为轮询状态 |
+| 桌面栈运行 | ✅ | `envd(0.10.2 arm64) / Xvfb / x11vnc / websockify / browse / Chromium` 全部在跑 |
+| noVNC 画面 | ✅ | 容器内 Chromium 实时可见（截图确认，含 browse 扩展设置页） |
+| 原生 arm64 镜像 | ✅ | 官方 base 为 **amd64-only**，binfmt 节点不一致 → 改原生 arm64 解决 `exec format error` |
+| 浏览器 profile 持久化 | ⏳ | 未测（pause → resume） |
+| browse 扩展配对 | ⏳ | 按决定暂缓；**配对后 browse 才能驱动浏览器**（VNC 本身不需要） |
+| `chrome.debugger` 稳定性 | ⏳ | 依赖配对后实测 |
+| gVisor `RuntimeClass` 下运行 | ⏳ | 未测 |
+| OpenCode + `agent-runtime` | ⏳ | 未做（`@opencode/sdk` + `mcp.servers.browse`） |
+| 前端「对话 + noVNC」 | ⏳ | 未做 |
+
+**关键教训**
+- **镜像架构**：官方沙箱镜像只有 amd64；arm64 节点若缺 binfmt 会 `exec format error`。原生 arm64 镜像最稳。
+- **buildx**：默认产出 OCI index（含 provenance attestation），部分节点会报 `no matching manifest`；用 `provenance/sbom=false` 产出**单 manifest**。
+- **envd 版本**：agent-sandbox 自带 `0.2.10`（amd64）；arm64 用 E2B 的 `v0.10.2/arm64`，启动需 `-isnotfc -no-cgroups`。
+- **路由**：noVNC 用 path 形式，路径结尾必须有 `/`；Cloudflare 下 HTTP 与 WebSocket 均正常。

@@ -78,6 +78,13 @@ agent-runtime 只依赖 **E2B SDK/协议**（`E2B_API_URL` / `E2B_DOMAIN` / `E2B
 
 **关键环境变量**（镜像层）：`OPENCODE_BROWSER_AUTO_UPDATE=off`（禁止每沙箱随机自更新）、固定 `XDG_DATA_HOME`/配置目录到持久路径。
 
+**本实例落地（已实测）**
+- 节点 aarch64；官方镜像 **amd64-only** 且 binfmt 不一致 → 构建**原生 arm64** 镜像，避免 `exec format error`。
+- envd 用 E2B 发布产物 `envd/v0.10.2/arm64/envd`，启动 `-isnotfc -no-cgroups -port 49983`（普通容器必需）。
+- 镜像由 GitHub Actions `ubuntu-24.04-arm` 构建，`provenance/sbom=false` 产出**单 manifest**（OCI index 会在部分节点 `no matching manifest`）。
+- 端口路由用 **path 形式**：`https://<host>/sandboxes/router/<sandboxID>/<port>/`（HTTP 200 + WS 101）；子域名形式不可用。
+- 模板 `desktop`：`image=ghcr.io/proximity333/agent-desktop:arm64`，`port=6080`。
+
 ### 4.2 agent-runtime（沙箱内自研薄层）
 
 职责：把 OpenCode SDK 包成一个可由网关访问的常驻服务。

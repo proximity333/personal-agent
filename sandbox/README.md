@@ -1,97 +1,121 @@
-# Desktop 沙箱镜像（agent-sandbox · E2B 协议 · linux/arm64）
+# Desktop 沙箱镜像（agent-sandbox · E2B 协议）
 
-目标：在 agent-sandbox 上提供一个**带桌面 + Chromium + browse + noVNC** 的沙箱模板，供每个用户独占使用。
+在 agent-sandbox 上提供一个**带桌面 + Chromium + noVNC** 的每用户沙箱模板。以下结论均已在实例上实测。
 
-## 镜像内容
-- 基底：`ghcr.io/agent-sandbox/sandbox-base-node:latest`（Node 22 + **envd 0.2.10**，监听 `49983`）
-- 桌面栈：`Xvfb` + `x11vnc` + `noVNC`（`6080`）
-- 浏览器：`Chromium`（arm64）+ `browse` extension（`--load-extension=/opt/browse-extension`）
-- browse：`browse serve`（relay，`127.0.0.1:19988`）
-- 入口：`sandbox/start-desktop.sh` 依次启动 envd → Xvfb → VNC/noVNC → relay → Chromium
+## 实例与实测结论
 
-## 前置
-- 集群是 **linux/arm64**（当前实例 `0.8.4-arm64` 已确认）
-- 能构建并推送镜像到 `ghcr.io/proximity333/*`
-- 集群能拉取该镜像（包设为 public，或配置 imagePullSecret）
+| 项 | 结论 |
+|---|---|
+| 实例 | `https://sandbox.98297469.xyz`，version `0.8.4-arm64` |
+| 鉴权 | **`X-API-Key`**（文档写的 `Authorization: Bearer` 在这版不生效；E2B SDK 用 `X-API-Key`） |
+| 节点架构 | **aarch64**；官方 `sandbox-base` 镜像为 **amd64-only**，靠 binfmt 模拟，且并非每个节点都装了 binfmt |
+| 端口路由 | ✅ **path 形式**：`https://<host>/sandboxes/router/<sandboxID>/<port>/`（HTTP 200 + WebSocket 101） |
+| 子域名路由 | ❌ `https://<port>-<sandboxID>.<domain>/` 不可用 |
+| 桌面栈 | ✅ `envd / Xvfb / x11vnc / websockify / browse / Chromium` 实测全部运行 |
 
-## 构建方式
+> 结论：**构建原生 arm64 镜像**，不要依赖 binfmt 模拟。amd64 路径会随机在部分节点报 `exec format error`。
 
-### A) GitHub Actions（推荐，免本地 Docker）
-1. 在本仓库执行 `git init` 并推到一个 GitHub 仓库（**public** 更省事：Actions 免费、包默认 public，K8s 免拉取凭证）。
-2. 打开仓库 **Actions → build-desktop → Run workflow**。
-3. 完成后镜像在 `ghcr.io/proximity333/agent-desktop:latest`。
+## 镜像
 
-工作流见 `.github/workflows/build-desktop.yml`（QEMU 交叉构建 arm64；首次较慢）。
+两个 Dockerfile：
 
-### B) 本地构建（Apple Silicon）
+- **`Dockerfile.desktop.arm64`（主用，原生 arm64）**
+  - base：`python:3.12-slim-trixie`
+  - envd：`https://storage.googleapis.com/e2b-artifact-binaries/envd/v0.10.2/arm64/envd`
+    （E2B 按架构发布；agent-sandbox 自带的 0.2.10 只有 amd64）
+  - 启动参数：`envd -isnotfc -no-cgroups -port 49983`（普通容器需要 `-isnotfc`）
+  - Chromium(arm64) + Xvfb + x11vnc + noVNC(6080) + browse(0.1.5) + extension
+- **`Dockerfile.desktop`（备用，amd64）**
+  - base 官方 `sandbox-base`（amd64）
+  - 仅在具备 binfmt 的节点上可用
+
+## 构建（GitHub Actions，arm64 原生）
+
+工作流：`.github/workflows/build-desktop.yml`
+
+- `runs-on: ubuntu-24.04-arm`
+- `file: sandbox/Dockerfile.desktop.arm64`
+- `platforms: linux/arm64`
+- **`provenance: false` / `sbom: false`** —— 关键：默认会产出 OCI index（含 attestation），arm64 节点可能报 `no matching manifest`；单 manifest 更稳。
+- 产物：`ghcr.io/proximity333/agent-desktop:arm64`
+
+触发：仓库 **Actions → build-desktop → Run workflow**。约 3～4 分钟。
+
+本地构建（可选，Apple Silicon）：
+
 ```bash
 brew install colima docker
 colima start --arch aarch64 --cpu 4 --memory 8
-
-# 需要带 write:packages 的 GitHub PAT
-echo "$GHCR_PAT" | docker login ghcr.io -u proximity333 --password-stdin
-
 docker buildx create --use --name desktop-builder 2>/dev/null || true
 docker buildx build --platform linux/arm64 \
-  -f sandbox/Dockerfile.desktop \
-  -t ghcr.io/proximity333/agent-desktop:latest --push .
+  -f sandbox/Dockerfile.desktop.arm64 \
+  -t ghcr.io/proximity333/agent-desktop:arm64 --push .
 ```
 
-## 注册模板（不要覆盖现有模板！）
+## 注册模板（整表替换，务必先 GET 再 POST）
 
-`POST /api/v1/config/templates` 是**整表替换**，务必先 GET、追加、再 POST：
+`POST /api/v1/config/templates` 是**整表替换**，直接 POST 单个条目会清掉其它模板：
 
 ```bash
 BASE=https://sandbox.98297469.xyz
 TOKEN=<你的 SYSTEM_TOKEN>
 
-# 1) 取现有模板（data 是一段 JSON 字符串，需要二次解析）
 curl -s -H "X-API-Key: $TOKEN" $BASE/api/v1/config/templates \
   | jq -r '.data' | jq . > /tmp/tpl.json
 
-# 2) 追加 desktop（若已存在同名则替换）
 jq -s '(.[0] | map(select(.name != "desktop"))) + [.[1]]' \
   /tmp/tpl.json sandbox/templates.desktop.json > /tmp/tpl2.json
 
-# 3) 整表写回
 curl -s -X POST $BASE/api/v1/config/templates \
   -H "X-API-Key: $TOKEN" -H "Content-Type: application/json" \
   --data @/tmp/tpl2.json
 ```
 
-## 创建并访问
+`templates.desktop.json` 关键字段：`image=…:arm64`、`port=6080`、`resources`。
+
+## 创建沙箱
 
 ```bash
-# 创建（E2B 协议）
 curl -s -X POST $BASE/e2b/v1/sandboxes \
   -H "Content-Type: application/json" -H "X-API-Key: $TOKEN" \
   -d '{"templateID":"desktop","timeout":1800,"metadata":{"name":"desk-1"}}'
 ```
 
-拿到 `sandboxID` 后，noVNC 地址（**path 形式**，已实测可用）：
+注意：
+- 创建请求会等沙箱就绪，可能被 **Cloudflare 524** 打断；**沙箱仍会继续创建**，不要重复创建。
+- 用原生列表接口轮询：
+
+```bash
+curl -s -H "X-API-Key: $TOKEN" $BASE/api/v1/sandbox \
+  | jq -c '(.data // .)[]? | select(.metadata.name=="desk-1") | {id,status}'
+```
+
+## 访问 noVNC
 
 ```
 https://sandbox.98297469.xyz/sandboxes/router/<sandboxID>/6080/vnc.html?autoconnect=1&resize=scale
 ```
 
-> 注意：`https://6080-<sandboxID>.<domain>/` 子域名形式在本实例**不可用**（无泛域名 TLS），请用上面的 path 形式；路径必须以 `/` 结尾。
+- 路径**必须以 `/` 结尾**，否则 301。
+- 子域名形式（`6080-<id>.<domain>`）不可用。
+- HTTP 与 WebSocket 均经 Cloudflare，实测 200 / 101。
 
-## browse 一次性配对
+## browse 状态与配对
 
-首次启动后，Chromium 里已加载 browse 扩展，但尚未与 relay 配对：
+- relay 监听 `127.0.0.1:19988`；容器内 Chromium 已加载 browse 扩展。
+- **VNC / 桌面本身不需要配对。**
+- 但要让 browse **真正驱动浏览器**，扩展必须与 relay 做**一次性配对**（写入持久 profile）。**当前按决定暂缓。**
+- `browse status` 若以不同用户/令牌运行，可能误报 `Relay: not running`（实际端口在监听）；以启动 relay 的同一用户查询为准。
 
-1. 在沙箱内执行 `browse pair`，得到一个 `XXXX-XXXX` 配对码；
-2. 通过 noVNC 打开 Chromium 的扩展选项页（工具栏扩展 → browse → Options / 或 "Pair with a code"）；
-3. 输入配对码并 Connect。
+## 已知待办
 
-配对密钥存于持久化的 Chromium profile（`/home/user/.config/chromium`），**只需配一次**，之后自动重连。
-
-## 已知风险 / 待验证
-- [ ] **browse 在 linux-arm64**：安装脚本 allowlist 含 `linux-arm64`，但需实测 release 是否真提供该 target 的二进制。
-- [ ] **Chromium arm64**：Debian trixie 的 `chromium` 包在 arm64 是否完整可用。
-- [ ] **gVisor**：Chromium 在 gVisor 下可能需要 `--no-sandbox`/`--disable-gpu`（本镜像已加）。先不加 `runtimeClassName: gvisor` 跑通，再切换验证。
-- [ ] **WebSocket**：noVNC 经 Cloudflare + per-port 路由的 WS 是否稳定。
-- [ ] **安全**：容器内 `x11vnc -nopw` 仅用于 POC；对外前必须加鉴权（Ingress/VNC 密码）。
+- [ ] browse 扩展配对 + `chrome.debugger` 稳定性实测
+- [ ] 浏览器 profile 持久化（pause → resume 登录态不掉）
+- [ ] gVisor `RuntimeClass` 下运行 Chromium
+- [ ] OpenCode + `agent-runtime` + `mcp.servers.browse`
+- [ ] 前端「对话 + noVNC」整合
+- [ ] 安全：`x11vnc -nopw` 与 Chromium `--no-sandbox` 均为 POC 配置，对外前必须加鉴权/隔离
 
 ## 资源建议
-模板默认 `cpu 0.5 / mem 1Gi`（limit 2 / 4Gi）。桌面 Chromium 的实际内存建议先按 2Gi request 起步，按观测再调。
+
+模板默认 `cpu 0.5 / mem 1Gi`（limit 2 / 4Gi）。桌面 Chromium 实测建议 **request ≥ 2Gi** 起步，按观测调整。
