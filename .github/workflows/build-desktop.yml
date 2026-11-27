@@ -10,8 +10,9 @@ permissions:
 
 jobs:
   build:
-    # 原生 arm64 runner（public 仓库可用），无需 QEMU 交叉编译
-    runs-on: ubuntu-24.04-arm
+    # 官方 sandbox-base 镜像是 amd64，且你的集群已验证可运行（QEMU 模拟）。
+    # 用 x64 runner 原生构建 amd64，最稳。
+    runs-on: ubuntu-latest
     env:
       IMAGE: ghcr.io/proximity333/agent-desktop:latest
     steps:
@@ -26,6 +27,6 @@ jobs:
         with:
           context: .
           file: sandbox/Dockerfile.desktop
-          platforms: linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE }}
