@@ -145,6 +145,19 @@ async function ensureSandbox() {
   return current
 }
 
+async function waitForPairing(name: string, ms = 60000): Promise<boolean> {
+  const end = Date.now() + ms
+  while (Date.now() < end) {
+    const out = await exec(name, `export HOME=/home/user; browse status --json 2>/dev/null`)
+    try {
+      const j = JSON.parse(out.trim())
+      if (j?.connected === true || j?.pairingState === "connected") return true
+    } catch {}
+    await sleep(3000)
+  }
+  return false
+}
+
 async function ensureRuntime(name: string): Promise<string> {
   const script = `export HOME=/home/user
 if curl -sf -m 1 http://127.0.0.1:${AGENT_PORT}/ >/dev/null; then
@@ -183,12 +196,14 @@ Bun.serve({
       }
       if (url.pathname === "/api/session" && req.method === "POST") {
         const sb = await ensureSandbox()
+        const pairing = await waitForPairing(sb.name)
         await writeConfig(sb.name)
         const runtime = await ensureRuntime(sb.name)
         const u = urls(sb)
         return Response.json({
           sandboxID: sb.id,
           name: sb.name,
+          pairing,
           runtime,
           ...u,
         })

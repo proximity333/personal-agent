@@ -219,7 +219,7 @@
 | noVNC 画面 | ✅ | 容器内 Chromium 实时可见（截图确认，含 browse 扩展设置页） |
 | 原生 arm64 镜像 | ✅ | 官方 base 为 **amd64-only**，binfmt 节点不一致 → 改原生 arm64 解决 `exec format error` |
 | 浏览器 profile 持久化 | ⏳ | 未测（pause → resume） |
-| browse 扩展配对 | ✅ | unpacked 扩展 ID 加入 `OPENCODE_BROWSER_EXTENSION_ORIGINS` 白名单后，用 xdotool 填入配对码完成 |
+| browse 扩展配对（自动化） | ✅ | 镜像启动脚本用 CDP 自动填码配对；全新沙箱约 25s 自动 `connected` |
 | `chrome.debugger` | ✅（初步） | `browse navigate https://example.com/` 成功；出现调试条与 Agents 标签组 |
 | gVisor `RuntimeClass` 下运行 | ⏳ | 未测 |
 | OpenCode + `agent-runtime` | ✅（启动） | Bun 1.4.5；WS 建 session 成功并收到 `session.created` 事件流 |

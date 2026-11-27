@@ -153,6 +153,16 @@ https://sandbox.98297469.xyz/sandboxes/router/<sandboxID>/6080/vnc.html?autoconn
 - 但要让 browse **真正驱动浏览器**，扩展必须与 relay 做**一次性配对**（写入持久 profile）。**当前按决定暂缓。**
 - `browse status` 若以不同用户/令牌运行，可能误报 `Relay: not running`（实际端口在监听）；以启动 relay 的同一用户查询为准。
 
+## 配对自动化（已验证）
+
+镜像内置 `sandbox/pair-browse.ts`，沙箱启动时自动完成 browse 扩展配对：
+
+- Chromium 以 `--remote-debugging-port=9222` 启动；
+- 脚本等 CDP 就绪 → 跑 `browse pair` 拿码 → 通过 CDP 在扩展设置页填码并点 Connect；
+- 轮询 `browse status --json` 直到 `connected`。
+
+实测：全新沙箱启动约 **25s** 后自动 `connected`，无需人工；随后 `browse navigate` 直接可用。
+
 ## 已知待办
 
 - [ ] browse 扩展配对 + `chrome.debugger` 稳定性实测
