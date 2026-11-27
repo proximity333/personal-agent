@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Personal Agent</title>
+<style>
+  :root { color-scheme: dark; --bg:#0f1115; --panel:#161a22; --line:#262c38; --text:#e6e9ef; --muted:#8b93a7; --accent:#5b8def; }
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif; }
+  #app { display:flex; height:100vh; }
+  #chat { width:460px; min-width:340px; display:flex; flex-direction:column; border-right:1px solid var(--line); background:var(--panel); }
+  #head { padding:14px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+  #head b { font-size:15px; }
+  #status { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  #dot { width:8px; height:8px; border-radius:50%; background:#666; }
+  #dot.on { background:#4ade80; box-shadow:0 0 8px #4ade80; }
+  #dot.err { background:#f87171; }
+  #messages { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:92%; padding:9px 12px; border-radius:10px; white-space:pre-wrap; word-break:break-word; }
+  .user { align-self:flex-end; background:#22406f; }
+  .assistant { align-self:flex-start; background:#1e2430; border:1px solid var(--line); }
+  .tool { align-self:flex-start; font-size:12px; color:var(--muted); background:transparent; padding:2px 4px; font-family:ui-monospace,Menlo,monospace; }
+  .err { color:#fca5a5; }
+  #composer { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); }
+  #input { flex:1; resize:none; height:44px; max-height:140px; padding:10px 12px; border-radius:9px; border:1px solid var(--line); background:#0f131a; color:var(--text); outline:none; font:inherit; }
+  #send { padding:0 16px; border:0; border-radius:9px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+  #send:disabled { opacity:.5; cursor:default; }
+  #screen { flex:1; background:#000; position:relative; }
+  #vnc { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  #hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="chat">
+    <div id="head">
+      <b>Personal Agent</b>
+      <span id="status"><span id="dot"></span><span id="statusText">初始化…</span></span>
+    </div>
+    <div id="messages"></div>
+    <div id="composer">
+      <textarea id="input" placeholder="让 agent 操作浏览器… 例如：打开 example.com 并截图" disabled></textarea>
+      <button id="send" disabled>发送</button>
+    </div>
+  </section>
+  <section id="screen">
+    <div id="hint">正在准备沙箱与桌面…</div>
+    <iframe id="vnc" allow="clipboard-read; clipboard-write" style="display:none"></iframe>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const messages = $("messages"), input = $("input"), send = $("send");
+const dot = $("dot"), statusText = $("statusText"), vnc = $("vnc"), hint = $("hint");
+
+let ws = null, sessionID = null, assistantEl = null, currentKey = null;
+
+function setStatus(text, cls) {
+  statusText.textContent = text;
+  dot.className = cls || "";
+}
+function addMsg(text, cls) {
+  const el = document.createElement("div");
+  el.className = "msg " + cls;
+  el.textContent = text;
+  messages.appendChild(el);
+  messages.scrollTop = messages.scrollHeight;
+  return el;
+}
+function addTool(text) {
+  if (!text) return;
+  addMsg(text, "tool");
+}
+
+function startAssistant(id) {
+  if (assistantEl && currentKey === id) return assistantEl;
+  currentKey = id || "assistant";
+  assistantEl = addMsg("", "assistant");
+  return assistantEl;
+}
+function appendAssistant(id, delta) {
+  const el = startAssistant(id);
+  el.textContent += delta;
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function handleEvent(ev) {
+  const t = ev?.type || "";
+  if (t === "session.text.started") { startAssistant(ev.data?.assistantMessageID); return; }
+  if (t === "session.text.delta") { appendAssistant(ev.data?.assistantMessageID, ev.data?.delta || ""); return; }
+  if (t === "session.tool.called") {
+    const name = ev.data?.name || "tool";
+    addTool("⚙ calling " + name);
+    return;
+  }
+  if (t === "session.tool.progress") {
+    const calls = ev.data?.metadata?.toolCalls || [];
+    for (const c of calls) {
+      if (!c) continue;
+      if (c.status === "running") addTool("→ " + (c.tool || "tool"));
+      else if (c.status === "completed") addTool("✓ " + (c.tool || "tool"));
+    }
+    return;
+  }
+  if (t === "session.execution.succeeded") { setStatus("就绪", "on"); send.disabled = false; return; }
+  if (t === "session.step.failed" || t === "session.execution.failed") {
+    const msg = ev.data?.error?.message || "执行失败";
+    addMsg("❌ " + msg, "msg err");
+    setStatus("出错", "err");
+    return;
+  }
+  if (t === "session.error") {
+    addMsg("❌ " + JSON.stringify(ev.data).slice(0, 300), "msg err");
+    setStatus("出错", "err");
+  }
+}
+
+function connect(url) {
+  ws = new WebSocket(url);
+  ws.onopen = () => setStatus("已连接 agent", "on");
+  ws.onclose = () => { setStatus("连接已断开", "err"); send.disabled = true; };
+  ws.onerror = () => setStatus("WS 错误", "err");
+  ws.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.type === "session") {
+      sessionID = m.sessionID;
+      setStatus("就绪", "on");
+      input.disabled = false; send.disabled = false;
+      input.focus();
+      return;
+    }
+    if (m.type === "error") { addMsg("❌ " + String(m.error).slice(0, 300), "msg err"); return; }
+    if (m.type === "event") handleEvent(m.event);
+  };
+}
+
+async function submit() {
+  const text = input.value.trim();
+  if (!text || !sessionID || !ws || ws.readyState !== 1) return;
+  addMsg(text, "user");
+  input.value = "";
+  setStatus("运行中…", "on");
+  send.disabled = true;
+  ws.send(JSON.stringify({ type: "prompt", sessionID, text }));
+}
+
+send.addEventListener("click", submit);
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
+});
+
+(async function init() {
+  try {
+    const res = await fetch("/api/session", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "session failed");
+    window.__session = data;
+    vnc.src = data.vncUrl;
+    vnc.style.display = "block";
+    hint.style.display = "none";
+    connect(data.agentWsUrl);
+  } catch (err) {
+    hint.textContent = "初始化失败：" + err.message;
+    setStatus("初始化失败", "err");
+  }
+})();
+</script>
+</body>
+</html>

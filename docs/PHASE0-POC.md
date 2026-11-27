@@ -225,7 +225,7 @@
 | OpenCode + `agent-runtime` | ✅（启动） | Bun 1.4.5；WS 建 session 成功并收到 `session.created` 事件流 |
 | 模型 provider（cb2 网关） | ✅ | OpenAI 兼容；`deepseek-v4.1-flash` / `mimo-v2.6-pro`；`providers.cb2` |
 | `tools.browse.*` 由 agent 调用 | ✅ | prompt → 模型自主调 `browse.navigate` 打开 example.com，再调 `browse.screenshot` 拿到 PNG |
-| 前端「对话 + noVNC」 | ⏳ | 未做 |
+| 前端「对话 + noVNC」 | ✅ | 单用户网关 + 前端已跑通：左对话、右 noVNC iframe；`/api/session` 下发 `vncUrl`/`agentWsUrl` |
 
 **关键教训**
 - **镜像架构**：官方沙箱镜像只有 amd64；arm64 节点若缺 binfmt 会 `exec format error`。原生 arm64 镜像最稳。
@@ -235,3 +235,4 @@
 - **自定义模型 provider**：`providers.<id>.package = "@opencode/ai/providers/openai-compatible"` + `settings.baseURL/apiKey`，`model = "<id>/<modelID>"`。
 - **E2B `envVars` 不进 PID 1**：不能靠它给启动脚本传模型配置；用**全局 config 文件** + 网关启动 runtime。
 - **沙箱内无 CAP_KILL**：`kill`/`pkill` 会 Permission denied；重启服务用新端口或重建沙箱。
+- **网关反代 noVNC**：`Bun.serve` 默认 10s idle 超时（设 `idleTimeout:255`）；反代必须删 `content-length`（Bun fetch 已解压，否则 HTML 被截断、module 不执行）。
