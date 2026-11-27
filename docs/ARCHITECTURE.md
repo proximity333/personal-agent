@@ -83,7 +83,9 @@ agent-runtime 只依赖 **E2B SDK/协议**（`E2B_API_URL` / `E2B_DOMAIN` / `E2B
 - envd 用 E2B 发布产物 `envd/v0.10.2/arm64/envd`，启动 `-isnotfc -no-cgroups -port 49983`（普通容器必需）。
 - 镜像由 GitHub Actions `ubuntu-24.04-arm` 构建，`provenance/sbom=false` 产出**单 manifest**（OCI index 会在部分节点 `no matching manifest`）。
 - 端口路由用 **path 形式**：`https://<host>/sandboxes/router/<sandboxID>/<port>/`（HTTP 200 + WS 101）；子域名形式不可用。
-- 模板 `desktop`：`image=ghcr.io/proximity333/agent-desktop:arm64`，`port=6080`。
+- 模板 `desktop`：`port=6080`；镜像用 **digest** 固定（tag 会被节点缓存，`IfNotPresent` 可能拉到旧镜像）。
+- `agent-runtime`：镜像内置 **Bun 1.4.5 + `@opencode/sdk` 2.4.2**，WS `:4096`；已实测建 session、事件流。
+- browse 配对：unpacked 扩展 ID `lojcho…` 需加入 `OPENCODE_BROWSER_EXTENSION_ORIGINS`；填码后 `browse navigate` 成功。
 
 ### 4.2 agent-runtime（沙箱内自研薄层）
 

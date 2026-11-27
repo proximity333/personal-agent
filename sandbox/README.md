@@ -15,6 +15,17 @@
 
 > 结论：**构建原生 arm64 镜像**，不要依赖 binfmt 模拟。amd64 路径会随机在部分节点报 `exec format error`。
 
+## 已验证（MVP-0a）
+
+- ✅ 原生 arm64 桌面沙箱 running；noVNC 画面可看可操作。
+- ✅ browse relay 运行，**扩展已配对**（unpacked ID 走白名单），`browse navigate` 打开网页成功，出现调试条与 Agents 标签组。
+- ✅ 镜像内置 **Bun 1.4.5 + `@opencode/sdk` 2.4.2**，`agent-runtime` 在 `:4096` 提供 HTTP/WS。
+- ✅ WS 建 session 成功，收到 `session.created` 事件流。
+- ⏳ `tools.browse.*` 由 agent 实际调用：需模型 key 后跑 prompt。
+- ⏳ 浏览器 profile 持久化、gVisor 运行：未测。
+
+> 注意：镜像 tag 会被节点缓存（`IfNotPresent`），发布新版本请用 **digest** 或唯一版本 tag，否则可能拉到旧镜像。
+
 ## 镜像
 
 两个 Dockerfile：

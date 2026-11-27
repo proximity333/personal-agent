@@ -219,10 +219,11 @@
 | noVNC 画面 | ✅ | 容器内 Chromium 实时可见（截图确认，含 browse 扩展设置页） |
 | 原生 arm64 镜像 | ✅ | 官方 base 为 **amd64-only**，binfmt 节点不一致 → 改原生 arm64 解决 `exec format error` |
 | 浏览器 profile 持久化 | ⏳ | 未测（pause → resume） |
-| browse 扩展配对 | ⏳ | 按决定暂缓；**配对后 browse 才能驱动浏览器**（VNC 本身不需要） |
-| `chrome.debugger` 稳定性 | ⏳ | 依赖配对后实测 |
+| browse 扩展配对 | ✅ | unpacked 扩展 ID 加入 `OPENCODE_BROWSER_EXTENSION_ORIGINS` 白名单后，用 xdotool 填入配对码完成 |
+| `chrome.debugger` | ✅（初步） | `browse navigate https://example.com/` 成功；出现调试条与 Agents 标签组 |
 | gVisor `RuntimeClass` 下运行 | ⏳ | 未测 |
-| OpenCode + `agent-runtime` | ⏳ | 未做（`@opencode/sdk` + `mcp.servers.browse`） |
+| OpenCode + `agent-runtime` | ✅（启动） | Bun 1.4.5；WS 建 session 成功并收到 `session.created` 事件流 |
+| `tools.browse.*` 由 agent 调用 | ⏳ | 需模型 key 后跑一次 prompt |
 | 前端「对话 + noVNC」 | ⏳ | 未做 |
 
 **关键教训**
