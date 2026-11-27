@@ -1,0 +1,58 @@
+# syntax=docker/dockerfile:1
+# Desktop sandbox image for agent-sandbox (E2B protocol, linux/arm64).
+#
+# Base: official agent-sandbox base-node image (Node 22 + envd 0.2.10 on :49983).
+# Adds: Xvfb + Chromium + noVNC (6080) + browse (relay) + browse extension.
+#
+# Build (arm64 host, e.g. Apple Silicon):
+#   docker buildx build --platform linux/arm64 \
+#     -f sandbox/Dockerfile.desktop \
+#     -t ghcr.io/<owner>/agent-desktop:latest --push .
+#
+# KNOWN RISK: browse extension pairing is a one-time manual step via noVNC
+# (the Chromium profile persists, so it only has to be done once per sandbox).
+
+FROM ghcr.io/agent-sandbox/sandbox-base-node:latest
+
+USER root
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:99 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xvfb \
+      x11vnc \
+      novnc \
+      websockify \
+      chromium \
+      unzip \
+      curl \
+      ca-certificates \
+      procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# browse CLI -> /usr/local/bin/browse. The release service ships linux-arm64.
+# Prefer the official installer (downloads the native binary); fall back to npm.
+RUN (curl -fsSL https://opencode.ai/browse/install -o /tmp/browse-install.sh \
+      && XDG_BIN_HOME=/usr/local/bin HOME=/root bash /tmp/browse-install.sh --agent none --no-modify-path) \
+    || (npm install -g @opencode/browse) \
+    || true
+RUN browse --version || true
+
+# browse browser extension (unpacked). Try stable, fall back to dev channel.
+RUN mkdir -p /opt/browse-extension \
+ && ( curl -fsSL https://anoma.ly/release/browse/extension/stable/chromium -o /tmp/ext.zip \
+      || curl -fsSL https://anoma.ly/release/browse/extension/dev/chromium     -o /tmp/ext.zip ) \
+ && unzip -q /tmp/ext.zip -d /opt/browse-extension \
+ && rm -f /tmp/ext.zip \
+ || echo "WARN: browse extension not fetched; configure manually"
+
+COPY sandbox/start-desktop.sh /usr/local/bin/start-desktop.sh
+RUN chmod +x /usr/local/bin/start-desktop.sh
+
+# 49983 envd (required) | 5900 raw VNC | 6080 noVNC
+EXPOSE 49983 5900 6080
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/start-desktop.sh"]
+CMD []

@@ -1,0 +1,12 @@
+{
+  "name": "desktop",
+  "image": "ghcr.io/proximity333/agent-desktop:latest",
+  "port": 6080,
+  "resources": {
+    "cpu": "0.5",
+    "memory": "1Gi",
+    "cpuLimit": "2",
+    "memoryLimit": "4Gi"
+  },
+  "description": "Desktop sandbox: Xvfb + Chromium + browse + noVNC(6080) + envd"
+}
