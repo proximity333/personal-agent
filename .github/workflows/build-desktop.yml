@@ -28,5 +28,9 @@ jobs:
           context: .
           file: sandbox/Dockerfile.desktop
           platforms: linux/amd64
+          # 关键：不要生成 OCI index / attestation。arm64 节点只能拉单 manifest 的 amd64
+          # （官方 sandbox-base 也是单 manifest，靠 binfmt 运行）。
+          provenance: false
+          sbom: false
           push: true
           tags: ${{ env.IMAGE }}
