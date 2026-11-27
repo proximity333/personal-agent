@@ -67,6 +67,11 @@ RUN mkdir -p /opt/browse-extension \
 COPY sandbox/start-desktop.sh /usr/local/bin/start-desktop.sh
 RUN chmod +x /usr/local/bin/start-desktop.sh
 
+# Bun + agent-runtime (OpenCode SDK host + WS)
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash && /usr/local/bin/bun --version
+COPY packages/agent-runtime /opt/agent-runtime
+RUN cd /opt/agent-runtime && /usr/local/bin/bun add @opencode/sdk
+
 EXPOSE 49983 5900 6080
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/start-desktop.sh"]

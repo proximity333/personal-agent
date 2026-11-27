@@ -26,6 +26,10 @@ x11vnc -display :99 -nopw -forever -shared -rfbport 5900 -bg -o /tmp/x11vnc.log 
 websockify --web /usr/share/novnc 6080 127.0.0.1:5900 &
 
 # 4) browse relay: the extension connects to 127.0.0.1:19988.
+#    The unpacked extension at /opt/browse-extension gets a path-derived ID;
+#    allow it explicitly and disable browse auto-update.
+export OPENCODE_BROWSER_EXTENSION_ORIGINS="chrome-extension://lojchoakeilecchdlgcpblpieghlpnmk"
+export OPENCODE_BROWSER_AUTO_UPDATE=off
 browse serve >>/tmp/browse-relay.log 2>&1 &
 
 # 5) Chromium on Xvfb with the browse extension, persistent profile.
@@ -42,6 +46,11 @@ if [ -n "${CHROME_BIN}" ]; then
     about:blank >>/tmp/chromium.log 2>&1 &
 else
   echo "WARN: chromium not found in PATH" >&2
+fi
+
+# 6) agent-runtime (OpenCode SDK host + WS), if baked in.
+if [ -x /usr/local/bin/bun ] && [ -f /opt/agent-runtime/src/index.ts ]; then
+  ( cd /opt/agent-runtime && nohup /usr/local/bin/bun run src/index.ts >>/tmp/agent-runtime.log 2>&1 & )
 fi
 
 # Keep the container alive; tini reaps children.
