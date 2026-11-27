@@ -65,6 +65,7 @@ RUN mkdir -p /opt/browse-extension \
  || echo "WARN: browse extension not fetched; configure manually"
 
 COPY sandbox/start-desktop.sh /usr/local/bin/start-desktop.sh
+COPY sandbox/pair-browse.ts /usr/local/bin/pair-browse.ts
 RUN chmod +x /usr/local/bin/start-desktop.sh
 
 # Bun + agent-runtime (OpenCode SDK host + WS)

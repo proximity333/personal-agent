@@ -41,6 +41,7 @@ if [ -n "${CHROME_BIN}" ]; then
     --disable-gpu \
     --user-data-dir="$HOME/.config/chromium" \
     --load-extension=/opt/browse-extension \
+    --remote-debugging-port=9222 \
     --no-first-run \
     --no-default-browser-check \
     about:blank >>/tmp/chromium.log 2>&1 &
@@ -48,7 +49,12 @@ else
   echo "WARN: chromium not found in PATH" >&2
 fi
 
-# 6) agent-runtime (OpenCode SDK host + WS), if baked in.
+# 6) auto-pair the browse extension (idempotent; uses CDP on 127.0.0.1:9222)
+if [ -x /usr/local/bin/bun ] && [ -f /usr/local/bin/pair-browse.ts ]; then
+  ( nohup /usr/local/bin/bun run /usr/local/bin/pair-browse.ts >>/tmp/pair-browse.log 2>&1 & )
+fi
+
+# 7) agent-runtime (OpenCode SDK host + WS), if baked in.
 if [ -x /usr/local/bin/bun ] && [ -f /opt/agent-runtime/src/index.ts ]; then
   ( cd /opt/agent-runtime && nohup /usr/local/bin/bun run src/index.ts >>/tmp/agent-runtime.log 2>&1 & )
 fi
