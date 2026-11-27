@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "image": "ghcr.io/proximity333/agent-desktop@sha256:7ddae0b6d3f1353b49ceb534a9a54001596064d5cf71777aab9e13cea860598f",
+  "image": "ghcr.io/proximity333/agent-desktop@sha256:863e71bfe642f3a79e5eed8f303d1bf48867a350ef97995f750bb69c90f649f1",
   "port": 6080,
   "resources": {
     "cpu": "0.5",

@@ -86,7 +86,7 @@ agent-runtime 只依赖 **E2B SDK/协议**（`E2B_API_URL` / `E2B_DOMAIN` / `E2B
 - 模板 `desktop`：`port=6080`；镜像用 **digest** 固定（tag 会被节点缓存，`IfNotPresent` 可能拉到旧镜像）。
 - `agent-runtime`：镜像内置 **Bun 1.4.5 + `@opencode/sdk` 2.4.2**，WS `:4096`；已实测建 session、事件流。
 - browse 配对：unpacked 扩展 ID `lojcho…` 需加入 `OPENCODE_BROWSER_EXTENSION_ORIGINS`；填码后 `browse navigate` 成功。
-- 模型：OpenAI 兼容网关经 `providers.<id>`（`package=@opencode/ai/providers/openai-compatible`，`settings.baseURL/apiKey`）；`agent-runtime` 从 env 读取，实测 agent 自主调用 `tools.browse.*`。
+- 模型：OpenAI 兼容网关经 `providers.<id>`（`package=@opencode/ai/providers/openai-compatible`，`settings.baseURL/apiKey`），写在沙箱的**全局 config 文件**里（E2B `envVars` 不进 PID 1）；实测 agent 自主调用 `tools.browse.*`。
 
 ### 4.2 agent-runtime（沙箱内自研薄层）
 

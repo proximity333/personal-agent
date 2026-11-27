@@ -233,4 +233,5 @@
 - **envd 版本**：agent-sandbox 自带 `0.2.10`（amd64）；arm64 用 E2B 的 `v0.10.2/arm64`，启动需 `-isnotfc -no-cgroups`。
 - **路由**：noVNC 用 path 形式，路径结尾必须有 `/`；Cloudflare 下 HTTP 与 WebSocket 均正常。
 - **自定义模型 provider**：`providers.<id>.package = "@opencode/ai/providers/openai-compatible"` + `settings.baseURL/apiKey`，`model = "<id>/<modelID>"`。
+- **E2B `envVars` 不进 PID 1**：不能靠它给启动脚本传模型配置；用**全局 config 文件** + 网关启动 runtime。
 - **沙箱内无 CAP_KILL**：`kill`/`pkill` 会 Permission denied；重启服务用新端口或重建沙箱。

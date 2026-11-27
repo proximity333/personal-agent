@@ -27,19 +27,39 @@
 
 > 注意：镜像 tag 会被节点缓存（`IfNotPresent`），发布新版本请用 **digest** 或唯一版本 tag，否则可能拉到旧镜像。
 
-## 模型接入（agent-runtime env）
+## 模型接入（全局 config 文件）
 
-`agent-runtime` 从环境变量构建 OpenAI 兼容 provider（密钥不写入镜像）：
+**不要依赖 E2B `envVars`**：实测它们不会进入容器 PID 1，启动脚本读不到。可靠做法是网关把配置写入沙箱，再启动 `agent-runtime`：
 
-| 变量 | 示例 |
-|---|---|
-| `OPENCODE_MODEL` | `cb2/deepseek-v4.1-flash` |
-| `OPENCODE_PROVIDER_ID` | `cb2` |
-| `OPENCODE_BASE_URL` | `https://<gateway>/v1` |
-| `OPENCODE_API_KEY` | `<key>` |
-| `OPENCODE_MODELS` | `deepseek-v4.1-flash,mimo-v2.6-pro` |
+`/home/user/.config/opencode/opencode.json`
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "cb2/deepseek-v4.1-flash",
+  "providers": {
+    "cb2": {
+      "name": "CB2 Gateway",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": { "baseURL": "https://<gateway>/v1", "apiKey": "<key>" },
+      "models": {
+        "deepseek-v4.1-flash": { "name": "DeepSeek V4.1 Flash" },
+        "mimo-v2.6-pro": { "name": "MiMo 2.6 Pro" }
+      }
+    }
+  },
+  "mcp": { "servers": { "browse": { "type": "local", "command": ["/usr/local/bin/browse", "mcp"] } } }
+}
+```
 
-创建沙箱时用 E2B `envVars` 注入即可。
+然后启动 runtime（可指定端口以避免与自动启动的实例冲突）：
+
+```bash
+setsid env HOME=/home/user AGENT_RUNTIME_PORT=4097 \
+  /usr/local/bin/bun run /opt/agent-runtime/src/index.ts \
+  >>/tmp/agent-runtime.log 2>&1 < /dev/null &
+```
+
+> 沙箱内无 `CAP_KILL`，`kill/pkill` 会 `Permission denied`；重启服务用新端口或重建沙箱。
 
 ## 镜像
 
