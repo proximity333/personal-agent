@@ -12,7 +12,7 @@
 # KNOWN RISK: browse extension pairing is a one-time manual step via noVNC
 # (the Chromium profile persists, so it only has to be done once per sandbox).
 
-FROM ghcr.io/agent-sandbox/sandbox-base-node:latest
+FROM ghcr.io/agent-sandbox/sandbox-base:latest
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       xvfb \
       x11vnc \
       novnc \
-      websockify \
+      python3-websockify \
       chromium \
       unzip \
       curl \
@@ -33,10 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # browse CLI -> /usr/local/bin/browse. The release service ships linux-arm64.
-# Prefer the official installer (downloads the native binary); fall back to npm.
 RUN (curl -fsSL https://opencode.ai/browse/install -o /tmp/browse-install.sh \
       && XDG_BIN_HOME=/usr/local/bin HOME=/root bash /tmp/browse-install.sh --agent none --no-modify-path) \
-    || (npm install -g @opencode/browse) \
     || true
 RUN browse --version || true
 
