@@ -13,15 +13,35 @@ import { OpenCode } from "@opencode/sdk"
 const directory = process.env.WORKSPACE ?? "/workspace"
 const port = Number(process.env.AGENT_RUNTIME_PORT ?? 4096)
 const model = process.env.OPENCODE_MODEL
+const providerID = process.env.OPENCODE_PROVIDER_ID ?? "cb2"
+const providerName = process.env.OPENCODE_PROVIDER_NAME ?? providerID
+const baseURL = process.env.OPENCODE_BASE_URL
+const apiKey = process.env.OPENCODE_API_KEY
+const modelIDs = (process.env.OPENCODE_MODELS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean)
+const browseBin = process.env.BROWSE_BIN ?? "/usr/local/bin/browse"
+
+const providers: Record<string, unknown> = {}
+if (baseURL && apiKey) {
+  providers[providerID] = {
+    name: providerName,
+    package: "@opencode/ai/providers/openai-compatible",
+    settings: { baseURL, apiKey },
+    models: Object.fromEntries(modelIDs.map((id) => [id, { name: id }])),
+  }
+}
 
 const opencode = await OpenCode.create({
   config: {
     ...(model ? { model } : {}),
+    ...(Object.keys(providers).length ? { providers } : {}),
     mcp: {
       servers: {
         browse: {
           type: "local",
-          command: ["/usr/local/bin/browse", "mcp"],
+          command: [browseBin, "mcp"],
         },
       },
     },

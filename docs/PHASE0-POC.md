@@ -223,7 +223,8 @@
 | `chrome.debugger` | ✅（初步） | `browse navigate https://example.com/` 成功；出现调试条与 Agents 标签组 |
 | gVisor `RuntimeClass` 下运行 | ⏳ | 未测 |
 | OpenCode + `agent-runtime` | ✅（启动） | Bun 1.4.5；WS 建 session 成功并收到 `session.created` 事件流 |
-| `tools.browse.*` 由 agent 调用 | ⏳ | 需模型 key 后跑一次 prompt |
+| 模型 provider（cb2 网关） | ✅ | OpenAI 兼容；`deepseek-v4.1-flash` / `mimo-v2.6-pro`；`providers.cb2` |
+| `tools.browse.*` 由 agent 调用 | ✅ | prompt → 模型自主调 `browse.navigate` 打开 example.com，再调 `browse.screenshot` 拿到 PNG |
 | 前端「对话 + noVNC」 | ⏳ | 未做 |
 
 **关键教训**
@@ -231,3 +232,5 @@
 - **buildx**：默认产出 OCI index（含 provenance attestation），部分节点会报 `no matching manifest`；用 `provenance/sbom=false` 产出**单 manifest**。
 - **envd 版本**：agent-sandbox 自带 `0.2.10`（amd64）；arm64 用 E2B 的 `v0.10.2/arm64`，启动需 `-isnotfc -no-cgroups`。
 - **路由**：noVNC 用 path 形式，路径结尾必须有 `/`；Cloudflare 下 HTTP 与 WebSocket 均正常。
+- **自定义模型 provider**：`providers.<id>.package = "@opencode/ai/providers/openai-compatible"` + `settings.baseURL/apiKey`，`model = "<id>/<modelID>"`。
+- **沙箱内无 CAP_KILL**：`kill`/`pkill` 会 Permission denied；重启服务用新端口或重建沙箱。
